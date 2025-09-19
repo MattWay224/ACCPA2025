@@ -1,0 +1,12 @@
+language core;
+
+extend with
+  #let-bindings,
+  #panic;
+
+fn main(n : Nat) -> Nat {
+  return
+    let n = succ (succ(0)) in
+    let m = succ (succ (succ (0))) in
+    if Nat::iszero(m) then panic! else (succ (0))
+}
