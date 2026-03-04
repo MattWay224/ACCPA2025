@@ -64,9 +64,6 @@ public class VisitTypeCheck {
 
 
 	public class DeclVisitor implements Decl.Visitor<Void, TypeCheckContext> {
-		private void collectFunSigs(ListDecl decls, TypeCheckContext arg) {
-
-		}
 
 		@Override
 		public Void visit(DeclFun p, TypeCheckContext arg) {
@@ -83,7 +80,6 @@ public class VisitTypeCheck {
 				}
 			}
 
-			collectFunSigs(p.listdecl_, funCtx);
 			if (p.listdecl_ != null) {
 				for (Decl d : p.listdecl_) {
 					if (d instanceof DeclFun f) {
