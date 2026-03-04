@@ -1,7 +1,5 @@
 package org.stella.typecheck;
 
-import org.stella.smth.TypePanic;
-import org.stella.smth.TypeThrow;
 import org.syntax.stella.Absyn.*;
 import org.syntax.stella.Absyn.List;
 import org.syntax.stella.Absyn.Record;
@@ -17,34 +15,105 @@ public class VisitTypeCheck {
 		public Void visit(AProgram p, Void arg) {
 			TypeCheckContext context = new TypeCheckContext(new HashMap<>(), null);
 
-			for (Decl decl : p.listdecl_) {
-				decl.accept(new ContextDeclVisitor(), context);
+			if (p.listdecl_ != null) {
+				for (Decl decl : p.listdecl_) {
+					if (!(decl instanceof DeclFun fun)) continue;
+					TypeVisitor tv = new TypeVisitor();
+
+					if (fun.returntype_ instanceof SomeReturnType srt) {
+						srt.type_.accept(tv, null);
+					}
+
+					if (fun.listparamdecl_ != null) {
+						for (ParamDecl pd : fun.listparamdecl_) {
+							AParamDecl ap = (AParamDecl) pd;
+							ap.type_.accept(tv, null);
+						}
+					}
+					Type ret = null;
+					if (fun.returntype_ instanceof SomeReturnType srt) {
+						ret = srt.type_;
+					}
+
+					ListType paramTypes = new ListType();
+					if (fun.listparamdecl_ != null) {
+						for (ParamDecl pd : fun.listparamdecl_) {
+							AParamDecl ap = (AParamDecl) pd;
+							paramTypes.add(ap.type_);
+						}
+					}
+
+					context.variables.put(fun.stellaident_, new TypeFun(paramTypes, ret));
+				}
 			}
 
 			if (!context.variables.containsKey("main")) {
 				throw new TypeCheckError("ERROR_MISSING_MAIN");
 			}
 
-			for (Decl decl : p.listdecl_) {
-				decl.accept(new DeclVisitor(), context);
+			if (p.listdecl_ != null) {
+				DeclVisitor dv = new DeclVisitor();
+				for (Decl decl : p.listdecl_) {
+					decl.accept(dv, context);
+				}
 			}
 
 			return null;
 		}
 	}
 
-	public class ContextDeclVisitor implements Decl.Visitor<Void, TypeCheckContext> {
+
+	public class DeclVisitor implements Decl.Visitor<Void, TypeCheckContext> {
+		private void collectFunSigs(ListDecl decls, TypeCheckContext arg) {
+
+		}
 
 		@Override
 		public Void visit(DeclFun p, TypeCheckContext arg) {
-			ListType listType = new ListType();
-			for (ParamDecl paramDecl : p.listparamdecl_) {
-				listType.add(((AParamDecl) paramDecl).type_);
+			SomeReturnType someRet = (SomeReturnType) p.returntype_;
+			Type declaredReturn = someRet.type_;
+
+			TypeCheckContext funCtx = arg.copy();
+			funCtx.expectedType = declaredReturn;
+
+			if (p.listparamdecl_ != null) {
+				for (ParamDecl pd : p.listparamdecl_) {
+					AParamDecl a = (AParamDecl) pd;
+					funCtx.variables.put(a.stellaident_, a.type_);
+				}
 			}
-			Type returnType = ((SomeReturnType) p.returntype_).type_;
-			arg.variables.put(p.stellaident_, new TypeFun(listType, returnType));
+
+			collectFunSigs(p.listdecl_, funCtx);
+			if (p.listdecl_ != null) {
+				for (Decl d : p.listdecl_) {
+					if (d instanceof DeclFun f) {
+						Type ret = null;
+						if (f.returntype_ instanceof SomeReturnType srt) {
+							ret = srt.type_;
+						}
+
+						ListType paramTypes = new ListType();
+						if (f.listparamdecl_ != null) {
+							for (ParamDecl pd : f.listparamdecl_) {
+								AParamDecl ap = (AParamDecl) pd;
+								paramTypes.add(ap.type_);
+							}
+						}
+						arg.variables.put(f.stellaident_, new TypeFun(paramTypes, ret));
+					}
+				}
+			}
+
+			if (p.listdecl_ != null) {
+				for (Decl d : p.listdecl_) {
+					d.accept(this, funCtx);
+				}
+			}
+			Type bodyType = p.expr_.accept(new ExprVisitor(), funCtx);
+			typeCheck(declaredReturn, bodyType, p.expr_, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
 			return null;
 		}
+
 
 		@Override
 		public Void visit(DeclFunGeneric p, TypeCheckContext arg) {
@@ -59,55 +128,6 @@ public class VisitTypeCheck {
 		@Override
 		public Void visit(DeclExceptionType p, TypeCheckContext arg) {
 			arg.exceptionType = p.type_;
-			return null;
-		}
-
-		@Override
-		public Void visit(DeclExceptionVariant p, TypeCheckContext arg) {
-			return null;
-		}
-	}
-
-	public class DeclVisitor implements Decl.Visitor<Void, TypeCheckContext> {
-
-		@Override
-		public Void visit(DeclFun p, TypeCheckContext arg) {
-			SomeReturnType someRet = (SomeReturnType) p.returntype_;
-			Type declaredReturn = someRet.type_;
-
-			TypeCheckContext bodyCtx = arg.copy();
-			for (ParamDecl pd : p.listparamdecl_) {
-				AParamDecl a = (AParamDecl) pd;
-				bodyCtx.variables.put(a.stellaident_, a.type_);
-			}
-			bodyCtx.expectedType = declaredReturn;
-			for (Decl d : p.listdecl_) {
-				d.accept(this, bodyCtx);
-			}
-
-			Type bodyType = p.expr_.accept(new ExprVisitor(), bodyCtx);
-			if (!declaredReturn.equals(bodyType)) {
-				throw new TypeCheckError(
-						"ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION | Expected: " +
-								PrettyPrinter.print(declaredReturn) + ", got: " + PrettyPrinter.print(bodyType),
-						p.expr_);
-			}
-			return null;
-		}
-
-
-		@Override
-		public Void visit(DeclFunGeneric p, TypeCheckContext arg) {
-			return null;
-		}
-
-		@Override
-		public Void visit(DeclTypeAlias p, TypeCheckContext arg) {
-			return null;
-		}
-
-		@Override
-		public Void visit(DeclExceptionType p, TypeCheckContext arg) {
 			return null;
 		}
 
@@ -144,52 +164,105 @@ public class VisitTypeCheck {
 
 		@Override
 		public Type visit(If p, TypeCheckContext arg) {
-			TypeCheckContext condCtx = arg.copy();
-			condCtx.expectedType = new TypeBool();
-			Type condType = p.expr_1.accept(this, condCtx);
-			typeCheck(new TypeBool(), condType, p.expr_1, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
+			checkType(p.expr_1, new TypeBool(), arg);
 
 			if (arg.expectedType != null) {
-				TypeCheckContext br = arg.copy();
-				br.expectedType = arg.expectedType;
-				Type thenType = p.expr_2.accept(this, br);
-				Type elseType = p.expr_3.accept(this, br);
-				typeCheck(arg.expectedType, thenType, p.expr_2, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
-				typeCheck(arg.expectedType, elseType, p.expr_3, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
+				checkType(p.expr_2, arg.expectedType, arg);
+				checkType(p.expr_3, arg.expectedType, arg);
 				return arg.expectedType;
 			}
 
-			Type thenType = p.expr_2.accept(this, arg.copy());
-			Type elseType = p.expr_3.accept(this, arg.copy());
-			typeCheck(thenType, elseType, p.expr_3, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
-			return thenType;
+			boolean thenPanic = (p.expr_2 instanceof org.syntax.stella.Absyn.Panic);
+			boolean elsePanic = (p.expr_3 instanceof org.syntax.stella.Absyn.Panic);
+
+			if (thenPanic && !elsePanic) {
+				Type t = inferType(p.expr_3, arg);
+
+				if (t instanceof TypeFun) {
+					throw new TypeCheckError("ERROR_AMBIGUOUS_PANIC_TYPE", p.expr_2);
+				}
+
+				checkType(p.expr_2, t, arg);
+				return t;
+			}
+
+			if (!thenPanic && elsePanic) {
+				Type t = inferType(p.expr_2, arg);
+
+				if (t instanceof TypeFun) {
+					throw new TypeCheckError("ERROR_AMBIGUOUS_PANIC_TYPE", p.expr_3);
+				}
+
+				checkType(p.expr_3, t, arg);
+				return t;
+			}
+
+			Type tThen = inferType(p.expr_2, arg);
+			checkType(p.expr_3, tThen, arg);
+			return tThen;
 		}
 
 
 		@Override
 		public Type visit(Let p, TypeCheckContext arg) {
-			TypeCheckContext scope = arg.copy();
-
+			TypeCheckContext saved = arg.copy();
 			for (PatternBinding pb : p.listpatternbinding_) {
-				APatternBinding b = (APatternBinding) pb;
-
-				Type exprType = b.expr_.accept(this, new TypeCheckContext(scope.variables, scope.exceptionType));
-
-				if (b.pattern_ instanceof PatternVar pv) {
-					scope.variables.put(pv.stellaident_, exprType);
-				} else {
-					throw new TypeCheckError("ERROR_UNEXPECTED_PATTERN_FOR_TYPE", b.pattern_);
+				APatternBinding binding = (APatternBinding) pb;
+				if (!(binding.pattern_ instanceof PatternVar patVar)) {
+					throw new TypeCheckError("ERROR_UNEXPECTED_PATTERN_FOR_TYPE", binding.pattern_);
 				}
+				arg.variables.put(patVar.stellaident_, inferType(binding.expr_, arg));
 			}
 
-			TypeCheckContext bodyArg = scope.copy();
-			bodyArg.expectedType = arg.expectedType;
-			return p.expr_.accept(this, bodyArg);
+			Type result = inferType(p.expr_, arg);
+
+			arg.variables.clear();
+			arg.variables.putAll(saved.variables);
+			arg.expectedType = saved.expectedType;
+			arg.exceptionType = saved.exceptionType;
+
+			return result;
 		}
 
 		@Override
 		public Type visit(LetRec p, TypeCheckContext arg) {
-			return null;
+			TypeCheckContext saved = arg.copy();
+			for (PatternBinding pb : p.listpatternbinding_) {
+				APatternBinding binding = (APatternBinding) pb;
+				if (!(binding.pattern_ instanceof PatternVar patVar)) {
+					throw new TypeCheckError("ERROR_UNEXPECTED_PATTERN_FOR_TYPE", binding.pattern_);
+				}
+
+				Type declared;
+				if (binding.expr_ instanceof TypeAsc ta) {
+					ta.type_.accept(new TypeVisitor(), null);
+					declared = ta.type_;
+				} else {
+					declared = inferType(binding.expr_, arg);
+				}
+				arg.variables.put(patVar.stellaident_, declared);
+			}
+
+			for (PatternBinding pb : p.listpatternbinding_) {
+				APatternBinding binding = (APatternBinding) pb;
+				PatternVar patVar = (PatternVar) binding.pattern_;
+				Type expected = arg.variables.get(patVar.stellaident_);
+
+				if (binding.expr_ instanceof TypeAsc ta) {
+					checkType(ta.expr_, expected, arg);
+				} else {
+					checkType(binding.expr_, expected, arg);
+				}
+			}
+
+			Type result = inferType(p.expr_, arg);
+
+			arg.variables.clear();
+			arg.variables.putAll(saved.variables);
+			arg.expectedType = saved.expectedType;
+			arg.exceptionType = saved.exceptionType;
+
+			return result;
 		}
 
 		@Override
@@ -229,6 +302,7 @@ public class VisitTypeCheck {
 
 		@Override
 		public Type visit(TypeAsc p, TypeCheckContext arg) {
+			p.type_.accept(new TypeVisitor(), null);
 			arg.expectedType = p.type_;
 			Type actualType = p.expr_.accept(this, arg);
 			typeCheck(p.type_, actualType, p.expr_, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
@@ -237,10 +311,11 @@ public class VisitTypeCheck {
 
 		@Override
 		public Type visit(TypeCast p, TypeCheckContext arg) {
+			p.type_.accept(new TypeVisitor(), null);
 			Type fromT = p.expr_.accept(this, arg.copy());
 			Type toT = p.type_;
 			if (arg.expectedType != null) {
-				Subtype.expectSubtype(toT, arg.expectedType, p, "ERROR_UNEXPECTED_SUBTYPE");
+				typeCheck(arg.expectedType, toT, p, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
 				return arg.expectedType;
 			}
 			return toT;
@@ -249,8 +324,6 @@ public class VisitTypeCheck {
 		@Override
 		public Type visit(Abstraction p, TypeCheckContext arg) {
 			TypeCheckContext lambdaContext = arg.copy();
-
-
 			ListType paramTypes = new ListType();
 			for (ParamDecl paramDecl : p.listparamdecl_) {
 				AParamDecl param = (AParamDecl) paramDecl;
@@ -265,7 +338,7 @@ public class VisitTypeCheck {
 				for (int i = 0; i < p.listparamdecl_.size(); i++) {
 					Type declared = ((AParamDecl) p.listparamdecl_.get(i)).type_;
 					Type expectedParam = expectedFun.listtype_.get(i);
-					if (!declared.equals(expectedParam)) {
+					if (!typesEqual(declared, expectedParam)) {
 						throw new TypeCheckError("ERROR_UNEXPECTED_TYPE_FOR_PARAMETER", (AParamDecl) p.listparamdecl_.get(i));
 					}
 				}
@@ -278,55 +351,46 @@ public class VisitTypeCheck {
 
 		@Override
 		public Type visit(Variant p, TypeCheckContext arg) {
-			if (arg.expectedType != null) {
-				if (!(arg.expectedType instanceof TypeVariant expected)) {
-					throw new TypeCheckError("ERROR_UNEXPECTED_VARIANT", p);
-				}
-				java.util.LinkedHashMap<String, OptionalTyping> map = new java.util.LinkedHashMap<>();
-				for (VariantFieldType vft : expected.listvariantfieldtype_) {
-					AVariantFieldType a = (AVariantFieldType) vft;
-					map.put(a.stellaident_, a.optionaltyping_);
-				}
-				OptionalTyping slot = map.get(p.stellaident_);
-				if (slot == null) {
-					throw new TypeCheckError("ERROR_UNEXPECTED_VARIANT_LABEL", p);
-				}
-
-				if (p.exprdata_ instanceof SomeExprData sed) {
-					if (slot instanceof SomeTyping st) {
-						Type inner = sed.expr_.accept(this, withExpected(arg, st.type_));
-						Subtype.expectSubtype(inner, st.type_, sed.expr_, "ERROR_UNEXPECTED_SUBTYPE");
-					} else {
-						throw new TypeCheckError("ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION", p);
-					}
-				} else { // NoExprData
-					if (slot instanceof SomeTyping) {
-						throw new TypeCheckError("ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION", p);
-					}
-				}
-				return expected;
+			if (arg.expectedType == null) {
+				throw new TypeCheckError("ERROR_AMBIGUOUS_VARIANT_TYPE", p);
 			}
 
-			if (p.exprdata_ instanceof SomeExprData sed) {
-				try {
-					Type inner = sed.expr_.accept(this, arg.copy());
-					ListVariantFieldType lst = new ListVariantFieldType();
-					lst.add(new AVariantFieldType(p.stellaident_, new SomeTyping(inner)));
-					return new TypeVariant(lst);
-				} catch (TypeCheckError e) {
-					String m = e.getMessage();
-					if (m.startsWith("ERROR_AMBIGUOUS_PANIC_TYPE")
-							|| m.startsWith("ERROR_AMBIGUOUS_THROW_TYPE")
-							|| m.startsWith("ERROR_AMBIGUOUS_REFERENCE_TYPE")) {
-						throw new TypeCheckError("ERROR_AMBIGUOUS_VARIANT_TYPE", p);
-					}
-					throw e;
-				}
-			} else {
-				ListVariantFieldType lst = new ListVariantFieldType();
-				lst.add(new AVariantFieldType(p.stellaident_, new NoTyping()));
-				return new TypeVariant(lst);
+			if (!(arg.expectedType instanceof TypeVariant expected)) {
+				throw new TypeCheckError("ERROR_UNEXPECTED_VARIANT", p);
 			}
+
+			OptionalTyping slot = null;
+			for (VariantFieldType vft : expected.listvariantfieldtype_) {
+				AVariantFieldType a = (AVariantFieldType) vft;
+				if (a.stellaident_.equals(p.stellaident_)) {
+					slot = a.optionaltyping_;
+					break;
+				}
+			}
+			if (slot == null) {
+				throw new TypeCheckError("ERROR_UNEXPECTED_VARIANT_LABEL", p);
+			}
+
+			boolean hasData = p.exprdata_ instanceof SomeExprData;
+			boolean expectsData = slot instanceof SomeTyping;
+
+			if (hasData && !expectsData) {
+				throw new TypeCheckError("ERROR_UNEXPECTED_DATA_FOR_NULLARY_LABEL", p);
+			}
+			if (!hasData && expectsData) {
+				throw new TypeCheckError("ERROR_MISSING_DATA_FOR_LABEL", p);
+			}
+
+			if (hasData) {
+				SomeExprData sed = (SomeExprData) p.exprdata_;
+				SomeTyping st = (SomeTyping) slot;
+
+				// checkType(payloadExpr, expectedPayloadType)
+				Type inner = sed.expr_.accept(this, withExpected(arg, st.type_));
+				typeCheck(st.type_, inner, sed.expr_, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
+			}
+
+			return expected;
 		}
 
 
@@ -351,7 +415,7 @@ public class VisitTypeCheck {
 				AMatchCase cs = (AMatchCase) cse;
 
 				TypeCheckContext branchCtx = arg.copy();
-				checkAndBindPattern(cs.pattern_, exprType, branchCtx);
+				checkPattern(cs.pattern_, exprType, branchCtx);
 
 				if (exprType instanceof TypeSum) {
 					if (cs.pattern_ instanceof PatternInl) sawInl = true;
@@ -374,12 +438,12 @@ public class VisitTypeCheck {
 
 				Type branchType = cs.expr_.accept(this, bodyCtx);
 				if (arg.expectedType != null) {
-					if (!arg.expectedType.equals(branchType)) {
+					if (!typesEqual(arg.expectedType, branchType)) {
 						throw new TypeCheckError("ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION", cs.expr_);
 					}
 				} else if (resultType == null) {
 					resultType = branchType;
-				} else if (!resultType.equals(branchType)) {
+				} else if (!typesEqual(resultType, branchType)) {
 					throw new TypeCheckError("ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION", cs.expr_);
 				}
 			}
@@ -399,10 +463,9 @@ public class VisitTypeCheck {
 			return (arg.expectedType != null) ? arg.expectedType : resultType;
 		}
 
-		private void checkAndBindPattern(Pattern ptn, Type expected, TypeCheckContext ctx) {
+		private void checkPattern(Pattern ptn, Type expected, TypeCheckContext arg) {
 			if (ptn instanceof PatternVar pv) {
-				// переменная всегда подходит и получает тип expected
-				ctx.variables.put(pv.stellaident_, expected);
+				arg.variables.put(pv.stellaident_, expected);
 				return;
 			}
 
@@ -411,9 +474,9 @@ public class VisitTypeCheck {
 					throw new TypeCheckError("ERROR_UNEXPECTED_PATTERN_FOR_TYPE", ptn);
 				}
 				if (pil.pattern_ instanceof PatternVar pv) {
-					ctx.variables.put(pv.stellaident_, sum.type_1);
+					arg.variables.put(pv.stellaident_, sum.type_1);
 				} else if (!(pil.pattern_ instanceof PatternUnit)) {
-					checkAndBindPattern(pil.pattern_, sum.type_1, ctx);
+					checkPattern(pil.pattern_, sum.type_1, arg);
 				}
 				return;
 			}
@@ -423,9 +486,9 @@ public class VisitTypeCheck {
 					throw new TypeCheckError("ERROR_UNEXPECTED_PATTERN_FOR_TYPE", ptn);
 				}
 				if (pir.pattern_ instanceof PatternVar pv) {
-					ctx.variables.put(pv.stellaident_, sum.type_2);
+					arg.variables.put(pv.stellaident_, sum.type_2);
 				} else if (!(pir.pattern_ instanceof PatternUnit)) {
-					checkAndBindPattern(pir.pattern_, sum.type_2, ctx);
+					checkPattern(pir.pattern_, sum.type_2, arg);
 				}
 				return;
 			}
@@ -443,15 +506,66 @@ public class VisitTypeCheck {
 				}
 				// head
 				if (pc.pattern_1 instanceof PatternVar pv1) {
-					ctx.variables.put(pv1.stellaident_, listT.type_);
+					arg.variables.put(pv1.stellaident_, listT.type_);
 				} else {
-					checkAndBindPattern(pc.pattern_1, listT.type_, ctx);
+					checkPattern(pc.pattern_1, listT.type_, arg);
 				}
 				// tail
 				if (pc.pattern_2 instanceof PatternVar pv2) {
-					ctx.variables.put(pv2.stellaident_, new TypeList(listT.type_));
+					arg.variables.put(pv2.stellaident_, new TypeList(listT.type_));
 				} else {
-					checkAndBindPattern(pc.pattern_2, new TypeList(listT.type_), ctx);
+					checkPattern(pc.pattern_2, new TypeList(listT.type_), arg);
+				}
+				return;
+			}
+
+			// variants
+			if (ptn instanceof PatternVariant pv) {
+				if (!(expected instanceof TypeVariant tv)) {
+					throw new TypeCheckError("ERROR_UNEXPECTED_PATTERN_FOR_TYPE", ptn);
+				}
+
+				String label = pv.stellaident_;
+				AVariantFieldType field = null;
+				for (VariantFieldType vft : tv.listvariantfieldtype_) {
+					AVariantFieldType a = (AVariantFieldType) vft;
+					if (a.stellaident_.equals(label)) {
+						field = a;
+						break;
+					}
+				}
+				if (field == null) {
+					throw new TypeCheckError("ERROR_UNEXPECTED_VARIANT_LABEL", ptn);
+				}
+
+				boolean hasPayloadType = field.optionaltyping_ instanceof SomeTyping;
+				boolean hasData = pv.patterndata_ instanceof SomePatternData;
+
+				if (hasData && !hasPayloadType) {
+					throw new TypeCheckError("ERROR_UNEXPECTED_NON_NULLARY_VARIANT_PATTERN", ptn);
+				}
+				if (!hasData && hasPayloadType) {
+					throw new TypeCheckError("ERROR_UNEXPECTED_NULLARY_VARIANT_PATTERN", ptn);
+				}
+
+				if (hasData) {
+					Type payloadT = ((SomeTyping) field.optionaltyping_).type_;
+					Pattern inner = ((SomePatternData) pv.patterndata_).pattern_;
+					checkPattern(inner, payloadT, arg);
+				}
+				return;
+			}
+
+			// tuples
+			if (ptn instanceof PatternTuple pt) {
+				if (!(expected instanceof TypeTuple tt)) {
+					throw new TypeCheckError("ERROR_UNEXPECTED_PATTERN_FOR_TYPE", ptn);
+				}
+				if (pt.listpattern_.size() != tt.listtype_.size()) {
+					throw new TypeCheckError("ERROR_UNEXPECTED_TUPLE_LENGTH", ptn);
+				}
+				for (int i = 0; i < pt.listpattern_.size(); i++) {
+					checkPattern(pt.listpattern_.get(i), tt.listtype_.get(i), arg);
 				}
 				return;
 			}
@@ -461,16 +575,19 @@ public class VisitTypeCheck {
 
 		@Override
 		public Type visit(List p, TypeCheckContext arg) {
-			if (arg.expectedType instanceof TypeList expected) {
+			if (arg.expectedType != null && !(arg.expectedType instanceof TypeList)) {
+				throw new TypeCheckError("ERROR_UNEXPECTED_LIST", p);
+			}
+
+			if (arg.expectedType instanceof TypeList expectedList) {
 				for (Expr e : p.listexpr_) {
-					Type et = e.accept(this, withExpected(arg, expected.type_));
-					typeCheck(expected.type_, et, e, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
+					checkType(e, expectedList.type_, arg);
 				}
-				return expected;
+				return expectedList;
 			}
 
 			if (p.listexpr_.isEmpty()) {
-				throw new TypeCheckError("ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION", p);
+				throw new TypeCheckError("ERROR_AMBIGUOUS_LIST_TYPE", p);
 			}
 
 			Iterator<Expr> it = p.listexpr_.iterator();
@@ -542,6 +659,7 @@ public class VisitTypeCheck {
 		@Override
 		public Type visit(Application p, TypeCheckContext arg) {
 			Type funType = p.expr_.accept(this, new TypeCheckContext(arg.variables, arg.exceptionType));
+
 			if (!(funType instanceof TypeFun typeFun)) {
 				throw new TypeCheckError("ERROR_NOT_A_FUNCTION", p.expr_);
 			}
@@ -553,9 +671,9 @@ public class VisitTypeCheck {
 				TypeCheckContext argContext = arg.copy();
 				argContext.expectedType = typeFun.listtype_.get(i);
 				Type actualType = p.listexpr_.get(i).accept(this, argContext);
-				typeCheck(typeFun.listtype_.get(i), actualType, p.listexpr_.get(i), "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
+				typeCheck(typeFun.listtype_.get(i), actualType, p.listexpr_.get(i),
+						"ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
 			}
-
 			return typeFun.type_;
 		}
 
@@ -589,10 +707,6 @@ public class VisitTypeCheck {
 			if (!(exprType instanceof TypeTuple tupleType)) {
 				throw new TypeCheckError("ERROR_NOT_A_TUPLE", p.expr_);
 			}
-
-			if (tupleType.listtype_.size() != 2) {
-				throw new TypeCheckError("ERROR_UNEXPECTED_TUPLE_LENGTH", p.expr_);
-			}
 			int index = p.integer_ - 1;
 
 			if (index < 0 || index >= tupleType.listtype_.size()) {
@@ -604,8 +718,21 @@ public class VisitTypeCheck {
 
 		@Override
 		public Type visit(Tuple p, TypeCheckContext arg) {
-			if (p.listexpr_.size() != 2)
-				throw new TypeCheckError("ERROR_UNEXPECTED_TUPLE_LENGTH", p);
+			if (arg.expectedType instanceof TypeTuple expected) {
+				if (p.listexpr_.size() != expected.listtype_.size()) {
+					throw new TypeCheckError("ERROR_UNEXPECTED_TUPLE_LENGTH", p);
+				}
+				ListType out = new ListType();
+				for (int i = 0; i < p.listexpr_.size(); i++) {
+					Expr e = p.listexpr_.get(i);
+					TypeCheckContext ec = arg.copy();
+					ec.expectedType = expected.listtype_.get(i);
+					Type et = e.accept(this, ec);
+					typeCheck(expected.listtype_.get(i), et, e, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
+					out.add(expected.listtype_.get(i));
+				}
+				return new TypeTuple(out);
+			}
 
 			ListType types = new ListType();
 			for (Expr e : p.listexpr_) {
@@ -616,107 +743,86 @@ public class VisitTypeCheck {
 
 		@Override
 		public Type visit(Record p, TypeCheckContext arg) {
-			Map<String, Type> expectedMap = null;
-			if (arg.expectedType instanceof TypeRecord exp) {
-				expectedMap = new LinkedHashMap<>();
-				for (RecordFieldType rft : exp.listrecordfieldtype_) {
-					ARecordFieldType a = (ARecordFieldType) rft;
-					expectedMap.put(a.stellaident_, a.type_);
-				}
-			}
-
-			Map<String, Type> actual = new LinkedHashMap<>();
-			for (Binding b : p.listbinding_) {
-				ABinding ab = (ABinding) b;
-				TypeCheckContext fieldCtx = arg.copy();
-				if (expectedMap != null && expectedMap.containsKey(ab.stellaident_)) {
-					fieldCtx.expectedType = expectedMap.get(ab.stellaident_);
-				} else {
-					fieldCtx.expectedType = null;
-				}
-				Type t = ab.expr_.accept(this, fieldCtx);
-				actual.put(ab.stellaident_, t);
-			}
-
-			if (arg.expectedType == null) {
-				ListRecordFieldType lr = new ListRecordFieldType();
-				for (var entry : actual.entrySet()) {
-					lr.add(new ARecordFieldType(entry.getKey(), entry.getValue()));
-				}
-				return new TypeRecord(lr);
-			}
-
-			if (!(arg.expectedType instanceof TypeRecord expected)) {
+			if (arg.expectedType != null && !(arg.expectedType instanceof TypeRecord)) {
 				throw new TypeCheckError("ERROR_UNEXPECTED_RECORD", p);
 			}
 
-			Map<String, Type> expectedMapFinal = new LinkedHashMap<>();
-			for (RecordFieldType rft : expected.listrecordfieldtype_) {
-				ARecordFieldType a = (ARecordFieldType) rft;
-				expectedMapFinal.put(a.stellaident_, a.type_);
-			}
-
-			for (String f : actual.keySet()) {
-				if (!expectedMapFinal.containsKey(f)) {
-					throw new TypeCheckError("ERROR_UNEXPECTED_RECORD_FIELDS", p);
+			Set<String> seenFields = new HashSet<>();
+			for (Binding b : p.listbinding_) {
+				ABinding ab = (ABinding) b;
+				if (!seenFields.add(ab.stellaident_)) {
+					throw new TypeCheckError("ERROR_DUPLICATE_RECORD_FIELDS", ab);
 				}
 			}
-			for (var entry : expectedMapFinal.entrySet()) {
-				String f = entry.getKey();
-				Type expT = entry.getValue();
-				if (!actual.containsKey(f)) {
-					throw new TypeCheckError("ERROR_MISSING_RECORD_FIELDS", p);
+
+			TypeRecord expectedRec = (arg.expectedType instanceof TypeRecord tr) ? tr : null;
+
+			if (expectedRec != null) {
+				// unexpected fields
+				for (String fieldName : seenFields) {
+					boolean found = false;
+					for (RecordFieldType rft : expectedRec.listrecordfieldtype_) {
+						ARecordFieldType rf = (ARecordFieldType) rft;
+						if (rf.stellaident_.equals(fieldName)) {
+							found = true;
+							break;
+						}
+					}
+					if (!found) {
+						throw new TypeCheckError("ERROR_UNEXPECTED_RECORD_FIELDS", p);
+					}
 				}
-				typeCheck(expT, actual.get(f), p, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
+
+				// missing fields
+				for (RecordFieldType rft : expectedRec.listrecordfieldtype_) {
+					ARecordFieldType rf = (ARecordFieldType) rft;
+					if (!seenFields.contains(rf.stellaident_)) {
+						throw new TypeCheckError("ERROR_MISSING_RECORD_FIELDS", p);
+					}
+				}
+
+				ListRecordFieldType out = new ListRecordFieldType();
+				for (RecordFieldType rft : expectedRec.listrecordfieldtype_) {
+					ARecordFieldType rf = (ARecordFieldType) rft;
+					for (Binding b : p.listbinding_) {
+						ABinding ab = (ABinding) b;
+						if (rf.stellaident_.equals(ab.stellaident_)) {
+							Type fieldType = ab.expr_.accept(this, withExpected(arg, rf.type_));
+							typeCheck(rf.type_, fieldType, ab.expr_, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
+							out.add(new ARecordFieldType(ab.stellaident_, rf.type_));
+							break;
+						}
+					}
+				}
+				return new TypeRecord(out);
 			}
 
-			return expected;
+			ListRecordFieldType lr = new ListRecordFieldType();
+			for (Binding b : p.listbinding_) {
+				ABinding ab = (ABinding) b;
+				Type t = ab.expr_.accept(this, arg.copy());
+				lr.add(new ARecordFieldType(ab.stellaident_, t));
+			}
+			return new TypeRecord(lr);
 		}
 
 
 		@Override
 		public Type visit(ConsList p, TypeCheckContext arg) {
-			if (arg.expectedType instanceof TypeList expectedList) {
-				// head : T
-				TypeCheckContext headCtx = arg.copy();
-				headCtx.expectedType = expectedList.type_;
-				Type headT = p.expr_1.accept(this, headCtx);
-				Subtype.expectSubtype(headT, expectedList.type_, p.expr_1, "ERROR_UNEXPECTED_SUBTYPE");
+			if (arg.expectedType != null && !(arg.expectedType instanceof TypeList)) {
+				throw new TypeCheckError("ERROR_UNEXPECTED_LIST", p);
+			}
 
-				// tail : [T]
-				TypeCheckContext tailCtx = arg.copy();
-				tailCtx.expectedType = expectedList;
-				Type tailT = p.expr_2.accept(this, tailCtx);
-				Subtype.expectSubtype(tailT, expectedList, p.expr_2, "ERROR_UNEXPECTED_SUBTYPE");
+			if (arg.expectedType instanceof TypeList expectedList) {
+				checkType(p.expr_1, expectedList.type_, arg);
+				checkType(p.expr_2, expectedList, arg);
 				return expectedList;
 			}
 
-			try {
-				Type tailT = p.expr_2.accept(this, arg.copy());
-				if (!(tailT instanceof TypeList tailList)) {
-					throw new TypeCheckError("ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION", p.expr_2);
-				}
-				Type elem = tailList.type_;
-
-				Type headT = p.expr_1.accept(this, withExpected(arg, elem));
-				Subtype.expectSubtype(headT, elem, p.expr_1, "ERROR_UNEXPECTED_SUBTYPE");
-				return tailList;
-			} catch (TypeCheckError e) {
-				if (isEmptyListLiteral(p.expr_2)) {
-					Type headT = p.expr_1.accept(this, arg.copy());
-
-					TypeCheckContext tailCtx = arg.copy();
-					tailCtx.expectedType = new TypeList(headT);
-					p.expr_2.accept(this, tailCtx);
-
-					return new TypeList(headT);
-				}
-				throw e;
-			}
-		}
-
-		private boolean isEmptyListLiteral(Expr e) {
-			return (e instanceof List l) && l.listexpr_.isEmpty();
+			Type headT = inferType(p.expr_1, arg);
+			Type listT = new TypeList(headT);
+			checkType(p.expr_2, listT, arg);
+			return listT;
 		}
 
 		private TypeCheckContext withExpected(TypeCheckContext base, Type expected) {
@@ -725,6 +831,18 @@ public class VisitTypeCheck {
 			return c;
 		}
 
+		private Type inferType(Expr expr, TypeCheckContext arg) {
+			Type savedExpected = arg.expectedType;
+			arg.expectedType = null;
+			Type result = expr.accept(this, arg);
+			arg.expectedType = savedExpected;
+			return result;
+		}
+
+		private void checkType(Expr expr, Type expected, TypeCheckContext arg) {
+			Type actual = expr.accept(this, withExpected(arg, expected));
+			typeCheck(expected, actual, expr, "ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION");
+		}
 
 		@Override
 		public Type visit(Head p, TypeCheckContext arg) {
@@ -755,43 +873,68 @@ public class VisitTypeCheck {
 
 		@Override
 		public Type visit(Panic p, TypeCheckContext arg) {
-			if (arg.expectedType == null) {
-				throw new TypeCheckError("ERROR_AMBIGUOUS_PANIC_TYPE", p);
+			if (arg.expectedType != null) {
+				return arg.expectedType;
 			}
-			return arg.expectedType;
+			throw new TypeCheckError("ERROR_AMBIGUOUS_PANIC_TYPE", p);
 		}
 
-
-		@Override
 		public Type visit(Throw p, TypeCheckContext arg) {
-			if (arg.expectedType == null) {
-				throw new TypeCheckError("ERROR_AMBIGUOUS_THROW_TYPE", p);
+			if (arg.exceptionType == null) {
+				throw new TypeCheckError("ERROR_EXCEPTION_TYPE_NOT_DECLARED", p);
 			}
-			return arg.expectedType;
+
+			checkType(p.expr_, arg.exceptionType, arg);
+
+			if (arg.expectedType != null) {
+				return arg.expectedType;
+			}
+			throw new TypeCheckError("ERROR_AMBIGUOUS_THROW_TYPE", p);
 		}
 
 
 		@Override
 		public Type visit(TryCatch p, TypeCheckContext arg) {
-			Type tryType = p.expr_1.accept(this, arg);
+			TypeCheckContext saved = arg.copy();
 
-			if (arg.exceptionType == null) {
-				throw new IllegalArgumentException("ERROR_EXCEPTION_TYPE_NOT_DECLARED");
+			if (p.pattern_ instanceof PatternVar pv) {
+				if (arg.exceptionType == null) {
+					throw new TypeCheckError("ERROR_EXCEPTION_TYPE_NOT_DECLARED", p);
+				}
+				arg.variables.put(pv.stellaident_, arg.exceptionType);
 			}
 
-			ListMatchCase listMatchCase = new ListMatchCase();
-			listMatchCase.add(new AMatchCase(p.pattern_, p.expr_2));
+			try {
+				if (arg.expectedType != null) {
+					checkType(p.expr_1, arg.expectedType, saved);
+					checkType(p.expr_2, arg.expectedType, arg);
+					return arg.expectedType;
+				}
 
-			Type catchType = visitMatch(arg.exceptionType, listMatchCase, arg, false);
-
-			return inferType(tryType, catchType);
+				Type catchType = inferType(p.expr_2, arg);
+				checkType(p.expr_1, catchType, saved);
+				return catchType;
+			} finally {
+				arg.variables.clear();
+				arg.variables.putAll(saved.variables);
+				arg.expectedType = saved.expectedType;
+				arg.exceptionType = saved.exceptionType;
+			}
 		}
 
 		@Override
 		public Type visit(TryWith p, TypeCheckContext arg) {
-			Type tryType = p.expr_1.accept(this, arg);
-			Type withType = p.expr_2.accept(this, arg);
-			return inferType(tryType, withType);
+			TypeCheckContext saved = arg.copy();
+
+			if (arg.expectedType != null) {
+				checkType(p.expr_1, arg.expectedType, saved);
+				checkType(p.expr_2, arg.expectedType, saved);
+				return arg.expectedType;
+			}
+
+			Type withType = inferType(p.expr_2, saved);
+			checkType(p.expr_1, withType, saved);
+			return withType;
 		}
 
 		@Override
@@ -801,26 +944,18 @@ public class VisitTypeCheck {
 
 		@Override
 		public Type visit(Inl p, TypeCheckContext arg) {
-			if (arg.expectedType instanceof TypeSum sum) {
-				Type leftExp = sum.type_1;
-				Type t = p.expr_.accept(this, withExpected(arg, leftExp));
-				Subtype.expectSubtype(t, leftExp, p.expr_, "ERROR_UNEXPECTED_SUBTYPE");
-				return sum;
-			}
-			Type left = p.expr_.accept(this, arg.copy());
-			return new TypeSum(left, new TypeBottom());
+			if (arg.expectedType == null) throw new TypeCheckError("ERROR_AMBIGUOUS_SUM_TYPE", p);
+			if (!(arg.expectedType instanceof TypeSum sum)) throw new TypeCheckError("ERROR_UNEXPECTED_INJECTION", p);
+			checkType(p.expr_, sum.type_1, arg);
+			return sum;
 		}
 
 		@Override
 		public Type visit(Inr p, TypeCheckContext arg) {
-			if (arg.expectedType instanceof TypeSum sum) {
-				Type rightExp = sum.type_2;
-				Type t = p.expr_.accept(this, withExpected(arg, rightExp));
-				Subtype.expectSubtype(t, rightExp, p.expr_, "ERROR_UNEXPECTED_SUBTYPE");
-				return sum;
-			}
-			Type right = p.expr_.accept(this, arg.copy());
-			return new TypeSum(new TypeBottom(), right);
+			if (arg.expectedType == null) throw new TypeCheckError("ERROR_AMBIGUOUS_SUM_TYPE", p);
+			if (!(arg.expectedType instanceof TypeSum sum)) throw new TypeCheckError("ERROR_UNEXPECTED_INJECTION", p);
+			checkType(p.expr_, sum.type_2, arg);
+			return sum;
 		}
 
 
@@ -853,17 +988,19 @@ public class VisitTypeCheck {
 
 		@Override
 		public Type visit(Fix p, TypeCheckContext arg) {
-			Type type = p.expr_.accept(this, arg);
-			if (type instanceof TypeFun) {
-				TypeFun typeFun = (TypeFun) type;
+			Type tf = inferType(p.expr_, arg);
 
-				Type argType = typeFun.listtype_.get(0);
-				Type returnType = typeFun.type_;
-
-				return inferType(argType, returnType);
+			if (!(tf instanceof TypeFun fun) || fun.listtype_.size() != 1) {
+				throw new TypeCheckError("ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION", p.expr_);
 			}
 
-			throw new IllegalArgumentException("ERROR_NOT_A_FUNCTION");
+			Type t1 = fun.listtype_.get(0);
+			Type t2 = fun.type_;
+			if (!typesEqual(t1, t2)) {
+				throw new TypeCheckError("ERROR_UNEXPECTED_TYPE_FOR_EXPRESSION", p.expr_);
+			}
+
+			return t1;
 		}
 
 		@Override
@@ -938,98 +1075,217 @@ public class VisitTypeCheck {
 		}
 	}
 
-	public class ReturnTypeVisitor implements ReturnType.Visitor<Type, TypeCheckContext> {
+	private boolean typesEqual(Type a, Type b) {
+		if (a == b) return true;
+		if (a == null || b == null) return false;
+
+		if (a.getClass() != b.getClass()) return false;
+		if (a instanceof TypeBool) return true;
+		if (a instanceof TypeNat) return true;
+		if (a instanceof TypeUnit) return true;
+		if (a instanceof TypeTop) return true;
+		if (a instanceof TypeBottom) return true;
+		if (a instanceof TypeRef ar && b instanceof TypeRef br) {
+			return typesEqual(ar.type_, br.type_);
+		}
+		if (a instanceof TypeList al && b instanceof TypeList bl) {
+			return typesEqual(al.type_, bl.type_);
+		}
+		if (a instanceof TypeSum as && b instanceof TypeSum bs) {
+			return typesEqual(as.type_1, bs.type_1) && typesEqual(as.type_2, bs.type_2);
+		}
+		if (a instanceof TypeTuple at && b instanceof TypeTuple bt) {
+			if (at.listtype_.size() != bt.listtype_.size()) return false;
+			for (int i = 0; i < at.listtype_.size(); i++) {
+				if (!typesEqual(at.listtype_.get(i), bt.listtype_.get(i))) return false;
+			}
+			return true;
+		}
+		if (a instanceof TypeFun af && b instanceof TypeFun bf) {
+			if (af.listtype_.size() != bf.listtype_.size()) return false;
+			for (int i = 0; i < af.listtype_.size(); i++) {
+				if (!typesEqual(af.listtype_.get(i), bf.listtype_.get(i))) return false;
+			}
+			return typesEqual(af.type_, bf.type_);
+		}
+		if (a instanceof TypeRecord ar && b instanceof TypeRecord br) {
+			Map<String, Type> am = new LinkedHashMap<>();
+			for (RecordFieldType rft : ar.listrecordfieldtype_) {
+				ARecordFieldType x = (ARecordFieldType) rft;
+				am.put(x.stellaident_, x.type_);
+			}
+			Map<String, Type> bm = new LinkedHashMap<>();
+			for (RecordFieldType rft : br.listrecordfieldtype_) {
+				ARecordFieldType x = (ARecordFieldType) rft;
+				bm.put(x.stellaident_, x.type_);
+			}
+			if (!am.keySet().equals(bm.keySet())) return false;
+			for (String k : am.keySet()) {
+				if (!typesEqual(am.get(k), bm.get(k))) return false;
+			}
+			return true;
+		}
+		if (a instanceof TypeVariant av && b instanceof TypeVariant bv) {
+			Map<String, Type> am = new LinkedHashMap<>();
+			for (VariantFieldType vft : av.listvariantfieldtype_) {
+				AVariantFieldType x = (AVariantFieldType) vft;
+				Type t = ((SomeTyping) x.optionaltyping_).type_;
+				am.put(x.stellaident_, t);
+			}
+			Map<String, Type> bm = new LinkedHashMap<>();
+			for (VariantFieldType vft : bv.listvariantfieldtype_) {
+				AVariantFieldType x = (AVariantFieldType) vft;
+				Type t = ((SomeTyping) x.optionaltyping_).type_;
+				bm.put(x.stellaident_, t);
+			}
+			if (!am.keySet().equals(bm.keySet())) return false;
+			for (String k : am.keySet()) {
+				if (!typesEqual(am.get(k), bm.get(k))) return false;
+			}
+			return true;
+		}
+		return a.equals(b);
+	}
+
+	public class TypeVisitor implements Type.Visitor<Void, Void> {
 
 		@Override
-		public Type visit(NoReturnType p, TypeCheckContext arg) {
+		public Void visit(TypeBool p, Void arg) {
 			return null;
 		}
 
 		@Override
-		public Type visit(SomeReturnType p, TypeCheckContext arg) {
-			return p.type_;
+		public Void visit(TypeNat p, Void arg) {
+			return null;
 		}
-	}
 
-	public void typeCheck(Type expectedType, Type type) {
-		if (!expectedType.equals(type)) {
-			throw new IllegalArgumentException("ERROR_UNEXPECTED_TYPE_IN_EXPRESSION | Expected: "
-					+ PrettyPrinter.print(expectedType) + ", got: " + PrettyPrinter.print(type));
+		@Override
+		public Void visit(TypeUnit p, Void arg) {
+			return null;
 		}
-	}
 
-	private TypeCheckContext withExpected(TypeCheckContext base, Type expected) {
-		TypeCheckContext c = base.copy();
-		c.expectedType = expected;
-		return c;
+		@Override
+		public Void visit(TypeTop p, Void arg) {
+			return null;
+		}
+
+		@Override
+		public Void visit(TypeBottom p, Void arg) {
+			return null;
+		}
+
+		@Override
+		public Void visit(TypeRef p, Void arg) {
+			if (p.type_ != null) p.type_.accept(this, null);
+			return null;
+		}
+
+		@Override
+		public Void visit(TypeVar p, Void arg) {
+			return null;
+		}
+
+		@Override
+		public Void visit(TypeList p, Void arg) {
+			if (p.type_ != null) p.type_.accept(this, null);
+			return null;
+		}
+
+		@Override
+		public Void visit(TypeSum p, Void arg) {
+			if (p.type_1 != null) p.type_1.accept(this, null);
+			if (p.type_2 != null) p.type_2.accept(this, null);
+			return null;
+		}
+
+		@Override
+		public Void visit(TypeTuple p, Void arg) {
+			for (Type t : p.listtype_) t.accept(this, null);
+			return null;
+		}
+
+		@Override
+		public Void visit(TypeAuto p, Void arg) {
+			return null;
+		}
+
+		@Override
+		public Void visit(TypeFun p, Void arg) {
+			for (Type t : p.listtype_) t.accept(this, null);
+			if (p.type_ != null) p.type_.accept(this, null);
+			return null;
+		}
+
+		@Override
+		public Void visit(TypeForAll p, Void arg) {
+			return null;
+		}
+
+		@Override
+		public Void visit(TypeRec p, Void arg) {
+			return null;
+		}
+
+		@Override
+		public Void visit(TypeRecord p, Void arg) {
+			Set<String> seen = new HashSet<>();
+			for (RecordFieldType rft : p.listrecordfieldtype_) {
+				ARecordFieldType rf = (ARecordFieldType) rft;
+				if (!seen.add(rf.stellaident_)) {
+					throw new TypeCheckError("ERROR_DUPLICATE_RECORD_TYPE_FIELDS", p);
+				}
+				rf.type_.accept(this, null);
+			}
+			return null;
+		}
+
+		@Override
+		public Void visit(TypeVariant p, Void arg) {
+			Set<String> seen = new HashSet<>();
+			for (VariantFieldType vft : p.listvariantfieldtype_) {
+				AVariantFieldType vf = (AVariantFieldType) vft;
+				if (!seen.add(vf.stellaident_)) {
+					throw new TypeCheckError("ERROR_DUPLICATE_VARIANT_TYPE_FIELDS", p);
+				}
+				if (vf.optionaltyping_ instanceof SomeTyping st) {
+					st.type_.accept(this, null);
+				}
+			}
+			return null;
+		}
 	}
 
 
 	private void typeCheck(Type expected, Type actual, Expr blame, String tag) {
-		Subtype.expectSubtype(actual, expected, blame, "ERROR_UNEXPECTED_SUBTYPE");
-	}
 
-	public Type inferType(Type expectedType, Type type) {
-		if (expectedType instanceof TypeBottom) {
-			return type;
-		} else if (type instanceof TypeBottom) {
-			return expectedType;
-		} else if (expectedType instanceof TypeSum expectedSum && type instanceof TypeSum typeSum) {
-			return new TypeSum(
-					inferType(expectedSum.type_1, typeSum.type_1),
-					inferType(expectedSum.type_2, typeSum.type_2)
-			);
-		} else if (expectedType instanceof TypeList expectedList && type instanceof TypeList typeList) {
-			return new TypeList(
-					inferType(expectedList.type_, typeList.type_)
-			);
-		} else if (expectedType instanceof TypeRecord expectedRecord && type instanceof TypeRecord typeRecord) {
-			Map<String, Type> exp = new LinkedHashMap<>();
-			for (RecordFieldType rft : expectedRecord.listrecordfieldtype_) {
-				ARecordFieldType a = (ARecordFieldType) rft;
-				exp.put(a.stellaident_, a.type_);
+		if (expected instanceof TypeBottom) {
+			if (!(actual instanceof TypeBottom)) {
+				throw new TypeCheckError(tag, blame);
 			}
-			Map<String, Type> act = new LinkedHashMap<>();
-			for (RecordFieldType rft : typeRecord.listrecordfieldtype_) {
-				ARecordFieldType a = (ARecordFieldType) rft;
-				act.put(a.stellaident_, a.type_);
-			}
-			if (!exp.keySet().equals(act.keySet())) {
-				throw new IllegalArgumentException("ERROR_UNEXPECTED_TYPE_IN_EXPRESSION | Expected: "
-						+ PrettyPrinter.print(expectedType) + ", got: " + PrettyPrinter.print(type));
-			}
-			ListRecordFieldType merged = new ListRecordFieldType();
-			for (RecordFieldType rft : expectedRecord.listrecordfieldtype_) {
-				ARecordFieldType a = (ARecordFieldType) rft;
-				Type mergedFieldType = inferType(a.type_, act.get(a.stellaident_));
-				merged.add(new ARecordFieldType(a.stellaident_, mergedFieldType));
-			}
-			return new TypeRecord(merged);
-		} else if (expectedType instanceof TypeRef expectedRef && type instanceof TypeRef typeRef) {
-			return new TypeRef(
-					inferType(expectedRef.type_, typeRef.type_)
-			);
-		} else if (expectedType instanceof TypeFun expectedFun && type instanceof TypeFun typeFun) {
-			if (expectedFun.listtype_.size() != typeFun.listtype_.size()) {
-				throw new IllegalArgumentException("ERROR_UNEXPECTED_TYPE_IN_EXPRESSION | Expected: "
-						+ PrettyPrinter.print(expectedType) + ", got: " + PrettyPrinter.print(type));
-			}
-			ListType mergedParams = new ListType();
-			for (int i = 0; i < expectedFun.listtype_.size(); i++) {
-				Type pExp = expectedFun.listtype_.get(i);
-				Type pAct = typeFun.listtype_.get(i);
-				mergedParams.add(inferType(pExp, pAct));
-			}
-			Type mergedRet = inferType(expectedFun.type_, typeFun.type_);
-			return new TypeFun(mergedParams, mergedRet);
+			return;
 		}
 
-		if (!expectedType.equals(type)) {
-			throw new IllegalArgumentException("ERROR_UNEXPECTED_TYPE_IN_EXPRESSION | Expected: "
-					+ PrettyPrinter.print(expectedType) + ", got: " + PrettyPrinter.print(type));
+		if (expected instanceof TypeVariant ev && actual instanceof TypeVariant av) {
+			Set<String> expLabels = new LinkedHashSet<>();
+			for (VariantFieldType vft : ev.listvariantfieldtype_) {
+				AVariantFieldType x = (AVariantFieldType) vft;
+				expLabels.add(x.stellaident_);
+			}
+			Set<String> actLabels = new LinkedHashSet<>();
+			for (VariantFieldType vft : av.listvariantfieldtype_) {
+				AVariantFieldType x = (AVariantFieldType) vft;
+				actLabels.add(x.stellaident_);
+			}
+			for (String lab : expLabels) {
+				if (!actLabels.contains(lab)) {
+					throw new TypeCheckError("ERROR_MISSING_VARIANT_LABELS | Missing label: " + lab, blame);
+				}
+			}
 		}
 
-		return expectedType;
+		if (!typesEqual(expected, actual)) {
+			throw new TypeCheckError(tag + " | Expected: " + PrettyPrinter.print(expected)
+					+ ", got: " + PrettyPrinter.print(actual), blame);
+		}
 	}
-
 }

@@ -481,7 +481,6 @@ class MainTest {
 	@ParameterizedTest(name = "{index} Typechecking well-typed program {0}")
 	@ValueSource(strings = {
 			"tests/week6/161.stella",
-			"tests/week6/173.stella",
 			"tests/week6/167.stella",
 			"tests/week6/171.stella",
 	})

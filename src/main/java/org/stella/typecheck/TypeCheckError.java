@@ -23,4 +23,16 @@ public class TypeCheckError extends RuntimeException {
 	public TypeCheckError(String message, AParamDecl pattern) {
 		super(message + " | at " + PrettyPrinter.print(pattern));
 	}
+
+	public TypeCheckError(String message, TypeVariant var) {
+		super(message + " | at " + PrettyPrinter.print(var));
+	}
+
+	public TypeCheckError(String message, ABinding ab) {
+		super(message + " | at " + PrettyPrinter.print(ab));
+	}
+
+	public TypeCheckError(String message, TypeRecord r) {
+		super(message + " | at " + PrettyPrinter.print(r));
+	}
 }
