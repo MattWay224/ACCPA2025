@@ -1,0 +1,4 @@
+language core;
+extend with #records, #let-bindings;
+
+fn main(n : Nat) -> Nat { return let r = {x = 0} in r.y }

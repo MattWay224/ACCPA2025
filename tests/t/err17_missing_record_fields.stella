@@ -1,0 +1,11 @@
+// ERROR_MISSING_RECORD_FIELDS: record missing required field
+language core;
+extend with #records;
+
+fn foo(r : {x : Nat, y : Nat}) -> Nat {
+  return r.x
+}
+
+fn main(n : Nat) -> Nat {
+  return foo({x = n})
+}

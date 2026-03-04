@@ -1,0 +1,4 @@
+language core;
+
+fn foo(x : Nat) -> Nat { return x }
+fn main(n : Nat) -> Nat { return foo(n)(n) }

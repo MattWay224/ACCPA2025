@@ -1,0 +1,7 @@
+// ERROR_NOT_A_LIST: List::head on non-list
+language core;
+extend with #lists;
+
+fn main(n : Nat) -> Nat {
+  return List::head(n)
+}

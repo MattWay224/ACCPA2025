@@ -1,0 +1,7 @@
+// ERROR_NOT_A_TUPLE: DotTuple on non-tuple
+language core;
+extend with #tuples;
+
+fn main(n : Nat) -> Nat {
+  return n.1
+}

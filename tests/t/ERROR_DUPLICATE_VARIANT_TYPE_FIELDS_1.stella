@@ -1,0 +1,4 @@
+language core;
+extend with #variants, #type-ascriptions;
+
+fn main(n : Nat) -> Nat { return (0 as <| a : Nat, a : Nat |>) }

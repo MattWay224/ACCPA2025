@@ -1,0 +1,7 @@
+// Well-typed: pairs and tuples
+language core;
+extend with #pairs, #tuples;
+
+fn main(n : Nat) -> Nat {
+  return {n, true, succ(n)}.1
+}

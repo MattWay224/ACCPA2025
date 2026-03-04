@@ -1,0 +1,6 @@
+// ERROR_MISSING_MAIN: no main function
+language core;
+
+fn foo(n : Nat) -> Nat {
+  return n
+}

@@ -1,0 +1,4 @@
+language core;
+extend with #variants, #let-bindings;
+
+fn main(n : Nat) -> Nat { return let v = <| value = 0 |> in n }

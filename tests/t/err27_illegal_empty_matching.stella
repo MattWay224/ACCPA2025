@@ -1,0 +1,6 @@
+// ERROR_ILLEGAL_EMPTY_MATCHING: match with no cases
+language core;
+
+fn main(n : Nat) -> Nat {
+  return match n { }
+}

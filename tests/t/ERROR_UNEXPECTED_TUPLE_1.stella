@@ -1,0 +1,8 @@
+language core;
+extend with #natural-literals;
+extend with #tuples;
+extend with #type-ascriptions;
+
+fn main(n : Nat) -> Nat {
+  return ({0, 1} as Nat)
+}

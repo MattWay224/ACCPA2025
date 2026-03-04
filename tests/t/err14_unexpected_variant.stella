@@ -1,0 +1,7 @@
+// ERROR_UNEXPECTED_VARIANT: variant checked against non-variant type
+language core;
+extend with #variants;
+
+fn main(n : Nat) -> Nat {
+  return <| x = n |>
+}

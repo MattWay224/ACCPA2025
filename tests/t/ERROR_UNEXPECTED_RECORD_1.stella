@@ -1,0 +1,8 @@
+language core;
+extend with #records;
+extend with #natural-literals;
+extend with #type-ascriptions;
+
+fn main(n : Nat) -> Nat {
+  return ({x = 0} as Nat);
+}

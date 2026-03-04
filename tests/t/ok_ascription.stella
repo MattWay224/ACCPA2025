@@ -1,0 +1,7 @@
+// Well-typed: type ascriptions
+language core;
+extend with #type-ascriptions;
+
+fn main(n : Nat) -> Nat {
+  return (succ(n) as Nat)
+}

@@ -1,0 +1,4 @@
+language core;
+extend with #lists, #let-bindings;
+
+fn main(n : Nat) -> Nat { return let xs = [] in n }

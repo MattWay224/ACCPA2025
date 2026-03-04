@@ -1,0 +1,4 @@
+language core;
+extend with #variants, #unit-type, #let-bindings;
+
+fn main(n : Nat) -> Nat { return let v = <| failure = unit |> in n }

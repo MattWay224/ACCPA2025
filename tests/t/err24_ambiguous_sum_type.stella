@@ -1,0 +1,9 @@
+// ERROR_AMBIGUOUS_SUM_TYPE: inl without type context
+language core;
+
+fn main(n : Nat) -> Nat {
+  return match inl(n) {
+      inl(a) => a
+    | inr(b) => b
+  }
+}

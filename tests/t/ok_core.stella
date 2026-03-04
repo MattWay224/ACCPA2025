@@ -1,0 +1,10 @@
+// Well-typed: core language (Bool, Nat, functions, if, succ, iszero, NatRec)
+language core;
+
+fn increment_twice(n : Nat) -> Nat {
+  return succ(succ(n))
+}
+
+fn main(n : Nat) -> Nat {
+  return Nat::rec(n, 0, fn(i : Nat) { return fn(acc : Nat) { return succ(acc) } })
+}

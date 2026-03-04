@@ -1,0 +1,11 @@
+// ERROR_DUPLICATE_RECORD_FIELDS: duplicate field in record expression
+language core;
+extend with #records;
+
+fn foo(r : {x : Nat, y : Nat}) -> Nat {
+  return r.x
+}
+
+fn main(n : Nat) -> Nat {
+  return foo({x = n, x = n, y = n})
+}

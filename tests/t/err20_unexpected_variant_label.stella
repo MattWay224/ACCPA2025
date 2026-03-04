@@ -1,0 +1,14 @@
+// ERROR_UNEXPECTED_VARIANT_LABEL: variant label not in variant type
+language core;
+extend with #variants;
+
+fn foo(v : <| x : Nat, y : Bool |>) -> Nat {
+  return match v {
+      <| x = n |> => n
+    | <| y = b |> => 0
+  }
+}
+
+fn main(n : Nat) -> Nat {
+  return foo(<| z = n |> as <| x : Nat, y : Bool |>)
+}

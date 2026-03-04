@@ -1,0 +1,3 @@
+language core;
+
+fn bar(b : Bool) -> Bool { return b }

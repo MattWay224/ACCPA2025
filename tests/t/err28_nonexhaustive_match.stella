@@ -1,0 +1,8 @@
+// ERROR_NONEXHAUSTIVE_MATCH_PATTERNS: missing succ case for Nat
+language core;
+
+fn main(n : Nat) -> Nat {
+  return match n {
+      0 => 0
+  }
+}

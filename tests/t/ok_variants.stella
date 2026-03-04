@@ -1,0 +1,10 @@
+// Well-typed: variants with match
+language core;
+extend with #variants;
+
+fn main(n : Nat) -> Nat {
+  return match (<| A = n |> as <| A : Nat, B : Bool |>) {
+      <| A = x |> => x
+    | <| B = b |> => 0
+  }
+}

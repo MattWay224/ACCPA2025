@@ -1,0 +1,3 @@
+language core;
+
+fn foo(x : Nat) -> Nat { return x }

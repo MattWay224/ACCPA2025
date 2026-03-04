@@ -1,0 +1,4 @@
+language core;
+extend with #sum-types, #type-ascriptions;
+
+fn main(n : Nat) -> Nat { return match (inr(0) as (Nat + Nat)) { inl(x) => x } }

@@ -1,0 +1,12 @@
+// Well-typed: higher-order functions
+language core;
+
+fn twice(f : fn(Bool) -> Bool) -> (fn(Bool) -> Bool) {
+  return fn(x : Bool) {
+    return f(f(x))
+  }
+}
+
+fn main(b : Bool) -> Bool {
+  return twice(fn(x : Bool) { return if x then false else true })(b)
+}

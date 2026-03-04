@@ -1,0 +1,11 @@
+// ERROR_UNEXPECTED_TUPLE_LENGTH: tuple length mismatch
+language core;
+extend with #tuples;
+
+fn foo(t : {Nat, Nat, Nat}) -> Nat {
+  return t.1
+}
+
+fn main(n : Nat) -> Nat {
+  return foo({n, n})
+}

@@ -1,0 +1,11 @@
+// ERROR_DUPLICATE_RECORD_TYPE_FIELDS: duplicate field in record type
+language core;
+extend with #records;
+
+fn foo(r : {x : Nat, x : Nat}) -> Nat {
+  return r.x
+}
+
+fn main(n : Nat) -> Nat {
+  return foo({x = n})
+}

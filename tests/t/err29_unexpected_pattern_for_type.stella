@@ -1,0 +1,9 @@
+// ERROR_UNEXPECTED_PATTERN_FOR_TYPE: wrong pattern kind for type
+language core;
+
+fn main(n : Nat) -> Nat {
+  return match n {
+      true => 0
+    | false => 0
+  }
+}

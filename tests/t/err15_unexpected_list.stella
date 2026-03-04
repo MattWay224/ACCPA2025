@@ -1,0 +1,7 @@
+// ERROR_UNEXPECTED_LIST: list checked against non-list type
+language core;
+extend with #lists;
+
+fn main(n : Nat) -> Nat {
+  return [n]
+}

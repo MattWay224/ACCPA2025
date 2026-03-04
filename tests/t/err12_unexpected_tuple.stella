@@ -1,0 +1,7 @@
+// ERROR_UNEXPECTED_TUPLE: tuple checked against non-tuple type
+language core;
+extend with #tuples;
+
+fn main(n : Nat) -> Nat {
+  return {n, n}
+}

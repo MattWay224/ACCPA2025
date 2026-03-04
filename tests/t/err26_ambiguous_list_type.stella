@@ -1,0 +1,7 @@
+// ERROR_AMBIGUOUS_LIST_TYPE: empty list without expected type context
+language core;
+extend with #lists;
+
+fn main(n : Nat) -> Nat {
+  return List::head([])
+}

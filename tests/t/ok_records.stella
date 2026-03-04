@@ -1,0 +1,7 @@
+// Well-typed: records
+language core;
+extend with #records;
+
+fn main(n : Nat) -> Nat {
+  return {x = n, y = true}.x
+}

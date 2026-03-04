@@ -1,0 +1,4 @@
+language core;
+extend with #variants, #unit-type, #type-ascriptions;
+
+fn main(n : Nat) -> Nat { return (0 as <| ok : Nat, ok : Nat, fail : Unit |>) }

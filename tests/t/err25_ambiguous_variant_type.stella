@@ -1,0 +1,9 @@
+// ERROR_AMBIGUOUS_VARIANT_TYPE: variant without type ascription in infer mode
+language core;
+extend with #variants;
+
+fn main(n : Nat) -> Nat {
+  return match <| x = n |> {
+      <| x = a |> => a
+  }
+}

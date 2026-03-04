@@ -1,0 +1,11 @@
+// ERROR_UNEXPECTED_RECORD_FIELDS: record has extra field
+language core;
+extend with #records;
+
+fn foo(r : {x : Nat}) -> Nat {
+  return r.x
+}
+
+fn main(n : Nat) -> Nat {
+  return foo({x = n, y = n})
+}

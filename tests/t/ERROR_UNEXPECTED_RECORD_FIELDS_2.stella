@@ -1,0 +1,4 @@
+language core;
+extend with #records, #type-ascriptions;
+
+fn main(n : Nat) -> Nat { return ({x = n, y = n, z = n}) as {x : Nat, y : Nat} }

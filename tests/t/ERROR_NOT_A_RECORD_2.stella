@@ -1,0 +1,4 @@
+language core;
+extend with #records;
+
+fn main(n : Nat) -> Nat { return true.x }

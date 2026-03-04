@@ -1,0 +1,7 @@
+// ERROR_NOT_A_RECORD: DotRecord on non-record
+language core;
+extend with #records;
+
+fn main(n : Nat) -> Nat {
+  return n.x
+}

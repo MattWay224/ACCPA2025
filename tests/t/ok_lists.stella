@@ -1,0 +1,7 @@
+// Well-typed: lists
+language core;
+extend with #lists;
+
+fn main(n : Nat) -> Nat {
+  return List::head(cons(n, cons(succ(n), [])))
+}

@@ -1,0 +1,13 @@
+// ERROR_DUPLICATE_VARIANT_TYPE_FIELDS: duplicate label in variant type
+language core;
+extend with #variants;
+
+fn foo(v : <| x : Nat, x : Bool |>) -> Nat {
+  return match v {
+      <| x = n |> => n
+  }
+}
+
+fn main(n : Nat) -> Nat {
+  return foo(<| x = n |> as <| x : Nat, x : Bool |>)
+}

@@ -1,0 +1,7 @@
+language core;
+extend with #sum-types;
+extend with #natural-literals;
+
+fn main(n : Nat) -> Nat {
+  return succ(inl(0));
+}

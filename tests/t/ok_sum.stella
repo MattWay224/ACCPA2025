@@ -1,0 +1,10 @@
+// Well-typed: sum types with match
+language core;
+extend with #sum-types;
+
+fn main(n : Nat + Bool) -> Nat {
+  return match n {
+      inl(x) => x
+    | inr(b) => 0
+  }
+}

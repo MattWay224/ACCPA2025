@@ -1,0 +1,7 @@
+// ERROR_TUPLE_INDEX_OUT_OF_BOUNDS: accessing tuple index beyond length
+language core;
+extend with #tuples;
+
+fn main(n : Nat) -> Nat {
+  return {n, n}.3
+}

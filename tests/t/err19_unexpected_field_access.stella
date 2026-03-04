@@ -1,0 +1,7 @@
+// ERROR_UNEXPECTED_FIELD_ACCESS: accessing non-existent field
+language core;
+extend with #records;
+
+fn main(n : Nat) -> Nat {
+  return {x = n}.y
+}
